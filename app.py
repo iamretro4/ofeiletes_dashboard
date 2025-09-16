@@ -16,7 +16,7 @@ from email.message import EmailMessage
 
 st.set_page_config(page_title="Αξιολόγηση Οφειλετών", layout="wide")
 
-# --- Define weights per industry defaults
+# --- Default weights per industry (μπορείς να τα αλλάζεις από το sidebar)
 DEFAULT_WEIGHTS = {
     'Βιομηχανία': {"rating":2, "liquidity":2, "debt_equity":1, "profit":1, "year":1},
     'Εμπόριο':    {"rating":1, "liquidity":1.5, "debt_equity":1, "profit":1, "year":0.5},
@@ -32,9 +32,9 @@ UPLOAD_DIR = "./uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # --- Helper functions
-def log_action(user, action, debtor, details=""):
+def log_action(action, debtor, details=""):
     now = datetime.datetime.now().isoformat()
-    line = pd.DataFrame([[now,user,action,debtor,details]],columns=["timestamp","user","action","debtor","details"])
+    line = pd.DataFrame([[now,action,debtor,details]],columns=["timestamp","action","debtor","details"])
     if os.path.exists(AUDIT_FILE):
         line.to_csv(AUDIT_FILE,mode='a',header=False,index=False)
     else:
@@ -61,12 +61,12 @@ def send_email_alert(receiver_email, subject, message):
         msg['From'] = EMAIL_ADDRESS
         msg['To'] = receiver_email
         msg.set_content(message)
-        # Uncomment for real send:
+        # Uncomment to actually send:
         # with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
         #     server.starttls()
         #     server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         #     server.send_message(msg)
-        st.success(f"Email προς {receiver_email}: {subject} (demo μόνο – δεν εστάλη email στην έκδοση αυτή)") 
+        st.success(f"Email προς {receiver_email}: {subject} (demo μόνο – δεν εστάλη email στην έκδοση αυτή)")
     except Exception as e:
         st.error(f"Πρόβλημα με αποστολή email! {str(e)}")
 
@@ -78,30 +78,20 @@ def generate_pdf(summary_html, filename="debt_report.pdf"):
         st.warning("Το pdfkit δεν έχει εγκατασταθεί. Χρησιμοποίησε pip install pdfkit και κατέβασε το wkhtmltopdf!")
         return False
 
-# --- Auth/simple login (for demo: no real user accounts)
-if "username" not in st.session_state:
-    st.session_state["username"] = st.text_input("Όνομα χρήστη (π.χ. admin, officer):", "admin", key="user")
-
-st.sidebar.title("⚙️ Admin Panel")
-is_admin = st.sidebar.checkbox("Λειτουργία Διαχειριστή", value=(st.session_state["username"].lower()=='admin'))
-
-# --- Dynamic weights per κλάδο - μόνο admin
-if is_admin:
-    st.sidebar.markdown("**Ρύθμιση βαρών αξιολόγησης (ανά κλάδο):**")
-    for ind in st.session_state["weights"]:
-        for field in st.session_state["weights"][ind]:
-            val = st.sidebar.number_input(
+# --- Sidebar: Ρύθμιση βαρών
+st.sidebar.title("⚙️ Ρύθμιση Βαρών")
+for ind in st.session_state["weights"]:
+    for field in st.session_state["weights"][ind]:
+        val = st.sidebar.number_input(
             f"{ind} - {field}", min_value=0.0, max_value=5.0,
             value=float(st.session_state["weights"][ind][field]), step=0.1,
-            key=f"{ind}_{field}"
-            )
-            st.session_state["weights"][ind][field] = val
+            key=f"{ind}_{field}")
+        st.session_state["weights"][ind][field] = val
 
 # --- Debtor Form (Insert/Edit)
 def debtor_form(edit_data=None):
     st.header("📝 Εισαγωγή / Επεξεργασία Οφειλέτη")
-    if edit_data is None:
-        edit_data = {}
+    if edit_data is None: edit_data = {}
     name = st.text_input("Όνομα Οφειλέτη", value=edit_data.get("name",""))
     icap = st.number_input("ICAP Rating", 0, 5, int(edit_data.get("icap",3)))
     year = st.number_input("Έτος Ίδρυσης", 1900, 2030, int(edit_data.get("year",2010)))
@@ -196,7 +186,7 @@ if action_on:
         if st.sidebar.button("Διαγραφή εγγραφής"):
             df = df[df["name"]!=action_on]
             save_data(df)
-            log_action(st.session_state["username"], "delete", action_on, f"Διαγραφή")
+            log_action("delete", action_on, f"Διαγραφή")
             st.sidebar.success("Διαγράφηκε!")
         if st.sidebar.button("Επεξεργασία εγγραφής"):
             edit_index = matched.index[0]
@@ -294,10 +284,10 @@ if st.button("✅ Καταχώριση αξιολόγησης"):
     }}
     if is_edit and edit_index is not None:
         df.loc[edit_index] = rec
-        log_action(st.session_state["username"], "edit", data['name'], "Επεξεργασία εγγραφής")
+        log_action("edit", data['name'], "Επεξεργασία εγγραφής")
     else:
         df = pd.concat([df, pd.DataFrame([rec])], ignore_index=True)
-        log_action(st.session_state["username"], "insert", data['name'], "Νέα εγγραφή")
+        log_action("insert", data['name'], "Νέα εγγραφή")
     save_data(df)
     st.success("Η εγγραφή αποθηκεύτηκε/ενημερώθηκε!")
 
@@ -312,19 +302,17 @@ else:
         apofasi_filter = st.multiselect("Φίλτρο απόφασης", options=df.apofasi.unique().tolist())
     with f2:
         year_filter = st.multiselect("Φίλτρο έτους", options=sorted(df.year.unique()))
-        user_filter = st.multiselect("Χρήστης/Reviewer", options=df.get("user",["admin"]).unique())
     filtered = df.copy()
     if industry_filter: filtered = filtered[filtered['industry'].isin(industry_filter)]
     if apofasi_filter: filtered = filtered[filtered['apofasi'].isin(apofasi_filter)]
     if year_filter: filtered = filtered[filtered['year'].isin(year_filter)]
-    if user_filter and "user" in filtered: filtered = filtered[filtered['user'].isin(user_filter)]
     st.dataframe(filtered)
     st.plotly_chart(px.pie(filtered, names="apofasi", title="Πίτα εγκρίσεων/απορρίψεων"))
     st.plotly_chart(px.histogram(filtered, x="industry", color="apofasi", barmode="group", title="Αποφάσεις ανά κλάδο"))
     st.plotly_chart(px.box(filtered, x="industry", y="score", title="Scores ανά κλάδο"))
 
-# -- Show audit log (admin only)
-if is_admin and os.path.exists(AUDIT_FILE):
+# -- Show audit log 
+if os.path.exists(AUDIT_FILE):
     st.subheader("🕵️ Audit Trail / Log ενεργειών")
     log_df = pd.read_csv(AUDIT_FILE)
     st.dataframe(log_df)
@@ -334,6 +322,3 @@ st.sidebar.header("🔗 API (demo)")
 api_integration = st.sidebar.button("Fetch ICAP ή άλλα scores μέσω API (demo λειτουργία)")
 if api_integration:
     st.sidebar.info("Θα μπορούσες εδώ να τραβήξεις τιμές κατευθείαν από ICAP API ή τράπεζα!")
-
-
-
