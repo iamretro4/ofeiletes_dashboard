@@ -16,7 +16,7 @@ from email.message import EmailMessage
 
 st.set_page_config(page_title="Αξιολόγηση Οφειλετών", layout="wide")
 
-# --- Default weights per industry (μπορείς να τα αλλάζεις από το sidebar)
+# --- Default weights per industry
 DEFAULT_WEIGHTS = {
     'Βιομηχανία': {"rating":2, "liquidity":2, "debt_equity":1, "profit":1, "year":1},
     'Εμπόριο':    {"rating":1, "liquidity":1.5, "debt_equity":1, "profit":1, "year":0.5},
@@ -31,7 +31,6 @@ AUDIT_FILE = "audit_trail.csv"
 UPLOAD_DIR = "./uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# --- Helper functions
 def log_action(action, debtor, details=""):
     now = datetime.datetime.now().isoformat()
     line = pd.DataFrame([[now,action,debtor,details]],columns=["timestamp","action","debtor","details"])
@@ -50,7 +49,6 @@ def save_data(df):
     df.to_csv(DATA_FILE, index=False)
 
 def send_email_alert(receiver_email, subject, message):
-    # SETTINGS: Put your real SMTP credentials here for production
     EMAIL_ADDRESS = "demo@example.com"
     EMAIL_PASSWORD = "yourpassword"
     SMTP_SERVER = "smtp.example.com"
@@ -66,7 +64,7 @@ def send_email_alert(receiver_email, subject, message):
         #     server.starttls()
         #     server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         #     server.send_message(msg)
-        st.success(f"Email προς {receiver_email}: {subject} (demo μόνο – δεν εστάλη email στην έκδοση αυτή)")
+        st.success(f"Email προς {receiver_email}: {subject} (demo μόνο – δεν εστάλη email)")
     except Exception as e:
         st.error(f"Πρόβλημα με αποστολή email! {str(e)}")
 
@@ -78,7 +76,6 @@ def generate_pdf(summary_html, filename="debt_report.pdf"):
         st.warning("Το pdfkit δεν έχει εγκατασταθεί. Χρησιμοποίησε pip install pdfkit και κατέβασε το wkhtmltopdf!")
         return False
 
-# --- Sidebar: Ρύθμιση βαρών
 st.sidebar.title("⚙️ Ρύθμιση Βαρών")
 for ind in st.session_state["weights"]:
     for field in st.session_state["weights"][ind]:
@@ -88,7 +85,6 @@ for ind in st.session_state["weights"]:
             key=f"{ind}_{field}")
         st.session_state["weights"][ind][field] = val
 
-# --- Debtor Form (Insert/Edit)
 def debtor_form(edit_data=None):
     st.header("📝 Εισαγωγή / Επεξεργασία Οφειλέτη")
     if edit_data is None: edit_data = {}
@@ -172,11 +168,9 @@ def compare_with_previous(df, new_entry):
             diffs.append(f"{field}: {old} → {new}")
     return "; ".join(diffs)
 
-# --- Main UI
 st.title("Αξιολόγηση Οφειλετών (Πλήρης Έκδοση)")
 df = load_data()
 
-# ------ CRUD -----
 edit_index = None
 action_on = st.sidebar.text_input("Όνομα προς Επεξεργασία/Διαγραφή", "")
 if action_on:
@@ -224,9 +218,12 @@ with cols[1]:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-st.write("**Σύγκριση με προηγούμενες αξιολογήσεις:**")
+st.markdown("**Σύγκριση με προηγούμενες αξιολογήσεις:**")
 diff = compare_with_previous(df,data)
-st.info(diff if diff else "Δεν βρέθηκε προηγούμενη αξιολόγηση.")
+if diff:
+    st.code(diff, language="text")
+else:
+    st.info("Δεν βρέθηκε προηγούμενη αξιολόγηση.")
 
 # -- Sensitivity Analysis
 st.subheader("Sensitivity Analysis")
@@ -250,7 +247,6 @@ st.plotly_chart(
     use_container_width=True
 )
 
-# -- PDF Export
 if PDFKIT:
     if st.button("⬇️ Εξαγωγή αποτελεσμάτων σε PDF"):
         html_rep = f"""
@@ -273,11 +269,9 @@ if PDFKIT:
 else:
     st.info("Για PDF Export εγκατέστησε το pdfkit και wkhtmltopdf (δες τεκμηρίωση πάνω)")
 
-# -- Email Notification
 if st.button("📧 Στείλε ειδοποίηση (Alert)"):
     send_email_alert("receiver@example.com", f"Αποτέλεσμα για {data['name']}", f"Score: {score}, Απόφαση: {apofasi}")
 
-# Submit to history (CREATE/EDIT)
 if st.button("✅ Καταχώριση αξιολόγησης"):
     rec = {**data, **{
         "score":score, "sl_pct":sl, "sl_amt":sl_amt, "rl_amt":rl_amt, "apofasi":apofasi
@@ -291,7 +285,6 @@ if st.button("✅ Καταχώριση αξιολόγησης"):
     save_data(df)
     st.success("Η εγγραφή αποθηκεύτηκε/ενημερώθηκε!")
 
-# -- View full historic table, filters, KPIs
 st.subheader("📚 Ιστορικό αξιολογήσεων & KPIs")
 if df.empty:
     st.info("Δεν υπάρχουν καταχωρήσεις.")
@@ -311,13 +304,11 @@ else:
     st.plotly_chart(px.histogram(filtered, x="industry", color="apofasi", barmode="group", title="Αποφάσεις ανά κλάδο"))
     st.plotly_chart(px.box(filtered, x="industry", y="score", title="Scores ανά κλάδο"))
 
-# -- Show audit log 
 if os.path.exists(AUDIT_FILE):
     st.subheader("🕵️ Audit Trail / Log ενεργειών")
     log_df = pd.read_csv(AUDIT_FILE)
     st.dataframe(log_df)
 
-# --- API stub (for future ICAP/trust signals connections)
 st.sidebar.header("🔗 API (demo)")
 api_integration = st.sidebar.button("Fetch ICAP ή άλλα scores μέσω API (demo λειτουργία)")
 if api_integration:
