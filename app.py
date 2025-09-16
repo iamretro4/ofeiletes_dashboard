@@ -95,8 +95,6 @@ if is_admin:
             value=float(st.session_state["weights"][ind][field]), step=0.1,
             key=f"{ind}_{field}"
             )
-
-            )
             st.session_state["weights"][ind][field] = val
 
 # --- Debtor Form (Insert/Edit)
@@ -336,5 +334,6 @@ st.sidebar.header("🔗 API (demo)")
 api_integration = st.sidebar.button("Fetch ICAP ή άλλα scores μέσω API (demo λειτουργία)")
 if api_integration:
     st.sidebar.info("Θα μπορούσες εδώ να τραβήξεις τιμές κατευθείαν από ICAP API ή τράπεζα!")
+
 
 
