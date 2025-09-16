@@ -91,9 +91,11 @@ if is_admin:
     for ind in st.session_state["weights"]:
         for field in st.session_state["weights"][ind]:
             val = st.sidebar.number_input(
-                f"{ind} - {field}", min_value=0.0,max_value=5.0,
-                value=st.session_state["weights"][ind][field],step=0.1,
-                key=f"{ind}_{field}"
+            f"{ind} - {field}", min_value=0.0, max_value=5.0,
+            value=float(st.session_state["weights"][ind][field]), step=0.1,
+            key=f"{ind}_{field}"
+            )
+
             )
             st.session_state["weights"][ind][field] = val
 
@@ -334,4 +336,5 @@ st.sidebar.header("🔗 API (demo)")
 api_integration = st.sidebar.button("Fetch ICAP ή άλλα scores μέσω API (demo λειτουργία)")
 if api_integration:
     st.sidebar.info("Θα μπορούσες εδώ να τραβήξεις τιμές κατευθείαν από ICAP API ή τράπεζα!")
+
 
